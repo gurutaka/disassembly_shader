@@ -1,6 +1,4 @@
-﻿// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
-
-Shader "Custom/Geometry/Disassembly"
+﻿Shader "Custom/Geometry/Disassembly"
 {
     Properties
     {
@@ -15,26 +13,30 @@ Shader "Custom/Geometry/Disassembly"
 
     SubShader
     {
-        // Tags{ "Queue"="Geometry" "RenderType"= "Transparent" "LightMode" = "ForwardBase" }
         Tags{ "Queue"="Transparent" "RenderType"= "Transparent"}
         Blend SrcAlpha OneMinusSrcAlpha
         Cull Off
-        // ZWrite Off //謎
+        // ZWrite Off //原因究明中
 
         CGINCLUDE
 	    #include "UnityCG.cginc"
 
         fixed _Destruction, _ScaleFactor, _RotationFactor, _PositionFactor, _AlphaFactor;
 
+        // https://forum.unity.com/threads/am-i-over-complicating-this-random-function.454887/#post-2949326
         float rand(float3 co)
         {
             return frac(sin(dot(co.xyz, float3(12.9898, 78.233, 53.539))) * 43758.5453);
         }
 
+        //https://wgld.org/d/glsl/g017.html
+        //https://github.com/hecomi/HoloLensPlayground/blob/master/Assets/Holo_NearClip_Effect/Shaders/DestructionAdditive.shader
         fixed3 rotate(fixed3 p, fixed3 rotation)
         {
+            //rotationがゼロ行列だと、Geometry shaderが表示されないので注意
             fixed3 a = normalize(rotation);
-            fixed angle = length(rotation);
+            float angle = length(rotation);
+            //rotationがゼロ行列のときの対応
             if (abs(angle) < 0.001) return p;
             fixed s = sin(angle);
             fixed c = cos(angle);
@@ -50,6 +52,7 @@ Shader "Custom/Geometry/Disassembly"
                 a.y * a.z * r - a.x * s,
                 a.z * a.z * r + c
             );
+
             return mul(m, p);
         }
 
@@ -85,37 +88,32 @@ Shader "Custom/Geometry/Disassembly"
             fixed3 r3 = rand(center);
             float3 up = float3(0, 1, 0);
 
-            // Compute the normal
+            // 外積つかって、法線ベクトルの計算
             float3 vecA = IN[1].vertex - IN[0].vertex;
             float3 vecB = IN[2].vertex - IN[0].vertex;
-            float3 normal = cross(vecA, vecB);
-            normal = normalize(mul(normal, (float3x3) unity_WorldToObject));
+            float3 normal = normalize(cross(vecA, vecB));
 
-            // Compute diffuse light
+            // diffuse lightの計算
             float3 lightDir = normalize(_WorldSpaceLightPos0.xyz);
             o.light = max(0., dot(normal, lightDir));
-
-            // Compute barycentric uv
 
             [unroll]
             for (int i = 0; i < 3; i++)
             {
                 v2g v = IN[i];
-                // g2f o;
 
                 UNITY_SETUP_INSTANCE_ID(v);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
-                // center位置を起点にスケール変化
-                v.vertex.xyz = (v.vertex.xyz - center) * (1.0 - _Destruction * _ScaleFactor) + center;
+                // centerを起点に三角メッシュの大きさが変化
+                v.vertex.xyz = center + (v.vertex.xyz - center) * (1.0 - _Destruction * _ScaleFactor);
 
-                // center位置を起点に、乱数を用いて回転を変化
-                v.vertex.xyz = rotate(v.vertex.xyz - center, r3 * _Destruction * _RotationFactor) + center;
+                // centerを起点に、頂点が回転
+                v.vertex.xyz = center + rotate(v.vertex.xyz - center, r3 * _Destruction * _RotationFactor);
 
-                // 法線方向に位置を変化
+                // 法線方向に弾け飛ぶ
                 v.vertex.xyz += normal * _Destruction * _PositionFactor * r3;
 
-                // 修正した頂点位置を射影変換しレンダリング用に変換
                 o.pos = UnityObjectToClipPos(v.vertex);
                 o.uv = IN[i].uv;
                 triStream.Append(o);
@@ -127,10 +125,10 @@ Shader "Custom/Geometry/Disassembly"
 
         ENDCG
 
-
+        //ForwardBaseでgeometryを描画
         Pass
         {
-            Tags {"LightMode" = "ForwardBase"}
+            Tags {"LightMode" = "ShadowCaster"}
             CGPROGRAM
             #include "UnityCG.cginc"
             #pragma vertex vert
@@ -143,6 +141,7 @@ Shader "Custom/Geometry/Disassembly"
             half4 frag(g2f i) : COLOR
             {
                 float4 col = tex2D(_MainTex, i.uv);
+                //フェードアウト
                 col.a *= 1.0 - _Destruction * _AlphaFactor;
                 col.rgb *= i.light;
                 return col;
@@ -150,6 +149,7 @@ Shader "Custom/Geometry/Disassembly"
             ENDCG
         }
 
+        //ShadowCasterで影だし
         Pass
         {
             Tags {"LightMode" = "ShadowCaster"}

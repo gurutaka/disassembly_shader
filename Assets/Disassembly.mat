@@ -24,10 +24,10 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Floats:
-    - _AlphaFactor: 0.07
+    - _AlphaFactor: 1
     - _Destruction: 0
-    - _PositionFactor: 1
+    - _PositionFactor: 0.76
     - _RotationFactor: 1
-    - _ScaleFactor: 1
+    - _ScaleFactor: 0.39
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
