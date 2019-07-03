@@ -128,7 +128,7 @@
         //ForwardBaseでgeometryを描画
         Pass
         {
-            Tags {"LightMode" = "ShadowCaster"}
+            Tags {"LightMode" = "ForwardBase"}
             CGPROGRAM
             #include "UnityCG.cginc"
             #pragma vertex vert
